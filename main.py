@@ -3,6 +3,8 @@ from pydantic import BaseModel
 from openai import OpenAI
 import psycopg2
 import os
+import json
+from datetime import datetime
 
 app = FastAPI()
 
@@ -14,7 +16,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 # =========================
-# RAM DA SESSÃO
+# RAM (sessão local)
 # =========================
 memoria_ram = []
 
@@ -37,11 +39,11 @@ def carregar_memoria_base():
         cur.close()
         conn.close()
 
-        memoria = "Você é a Sema.\n\nMemória Base:\n"
+        contexto = "Você é a Sema.\n\nMemória Base:\n"
         for k, v in dados:
-            memoria += f"- {k}: {v}\n"
+            contexto += f"- {k}: {v}\n"
 
-        return memoria
+        return contexto
 
     except Exception as e:
         print("ERRO AO CARREGAR MEMÓRIA BASE:", e)
@@ -49,6 +51,28 @@ def carregar_memoria_base():
 
 
 memoria_base_cache = carregar_memoria_base()
+
+
+# =========================
+# SALVAR DIÁRIO (FINAL DA SESSÃO)
+# =========================
+def salvar_diario():
+    data = datetime.now().date().isoformat()
+
+    os.makedirs("data", exist_ok=True)
+    caminho = f"data/{data}.json"
+
+    if os.path.exists(caminho):
+        with open(caminho, "r", encoding="utf-8") as f:
+            diario = json.load(f)
+    else:
+        diario = {data: []}
+
+    for m in memoria_ram:
+        diario[data].append(m)
+
+    with open(caminho, "w", encoding="utf-8") as f:
+        json.dump(diario, f, ensure_ascii=False, indent=2)
 
 
 # =========================
@@ -65,14 +89,31 @@ def home():
 @app.post("/chat")
 def chat(msg: Mensagem):
 
-    # salva na RAM
+    texto = msg.texto.strip().lower()
+
+    # =========================
+    # COMANDO SAIR
+    # =========================
+    if texto == "sair":
+        salvar_diario()
+        memoria_ram.clear()
+
+        return {
+            "resposta": "Sessão finalizada. Conversa salva no diário."
+        }
+
+    # =========================
+    # SALVA USER NA RAM
+    # =========================
     memoria_ram.append(("user", msg.texto))
 
-    # limita só por segurança (opcional)
+    # limite de segurança
     if len(memoria_ram) > 200:
         memoria_ram.pop(0)
 
-    # monta contexto
+    # =========================
+    # CONTEXTO PARA IA
+    # =========================
     contexto = f"""
 {memoria_base_cache}
 
@@ -82,7 +123,9 @@ Memória da conversa:
     for role, texto in memoria_ram:
         contexto += f"{role}: {texto}\n"
 
-    # chama IA
+    # =========================
+    # CHAMADA IA
+    # =========================
     resposta = client.responses.create(
         model="gpt-5-mini",
         input=contexto
