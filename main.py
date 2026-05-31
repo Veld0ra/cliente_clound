@@ -30,6 +30,10 @@ class Mensagem(BaseModel):
 # =========================
 def carregar_memoria_base():
     try:
+        if not DATABASE_URL:
+            print("❌ DATABASE_URL não configurada")
+            return "Você é a Sema."
+
         conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         cur = conn.cursor()
 
@@ -48,7 +52,7 @@ def carregar_memoria_base():
         return contexto
 
     except Exception as e:
-        print("ERRO AO CARREGAR MEMÓRIA BASE:", e)
+        print("❌ ERRO AO CARREGAR MEMÓRIA BASE:", e)
         return "Você é a Sema."
 
 
@@ -92,11 +96,14 @@ def home():
 
 
 # =========================
-# DEBUG NEON (NOVO)
+# DEBUG NEON
 # =========================
 @app.get("/debug-neon")
 def debug_neon():
     try:
+        if not DATABASE_URL:
+            return {"status": "erro", "erro": "DATABASE_URL não existe"}
+
         conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         cur = conn.cursor()
 
