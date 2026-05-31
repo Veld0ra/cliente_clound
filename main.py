@@ -13,69 +13,86 @@ client = OpenAI(
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 
+# =========================
+# RAM DA SESSÃO
+# =========================
+memoria_ram = []
+
+
 class Mensagem(BaseModel):
     texto: str
 
 
-def carregar_memoria():
+# =========================
+# CARREGA MEMÓRIA BASE (1x)
+# =========================
+def carregar_memoria_base():
     try:
-        if not DATABASE_URL:
-            print("DATABASE_URL não encontrada")
-            return "Você é Sema."
-
         conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         cur = conn.cursor()
 
-        # Memória base
         cur.execute("SELECT chave, valor FROM memoria_base")
-        memoria_base = cur.fetchall()
-
-        # Memória permanente
-        cur.execute("SELECT categoria, conteudo FROM memoria_permanente")
-        memoria_permanente = cur.fetchall()
+        dados = cur.fetchall()
 
         cur.close()
         conn.close()
 
-        contexto = "Você é Sema.\n\n"
+        memoria = "Você é a Sema.\n\nMemória Base:\n"
+        for k, v in dados:
+            memoria += f"- {k}: {v}\n"
 
-        contexto += "Memória Base:\n"
-        for chave, valor in memoria_base:
-            contexto += f"- {chave}: {valor}\n"
-
-        contexto += "\nMemória Permanente:\n"
-        for categoria, conteudo in memoria_permanente:
-            contexto += f"- {categoria}: {conteudo}\n"
-
-        return contexto
+        return memoria
 
     except Exception as e:
-        print("ERRO AO CARREGAR MEMÓRIA:", e)
-        return "Você é Sema."
+        print("ERRO AO CARREGAR MEMÓRIA BASE:", e)
+        return "Você é a Sema."
 
 
+memoria_base_cache = carregar_memoria_base()
+
+
+# =========================
+# HOME
+# =========================
 @app.get("/")
 def home():
     return {"status": "online"}
 
 
+# =========================
+# CHAT
+# =========================
 @app.post("/chat")
 def chat(msg: Mensagem):
 
-    contexto = carregar_memoria()
+    # salva na RAM
+    memoria_ram.append(("user", msg.texto))
 
-    prompt = f"""
-{contexto}
+    # limita só por segurança (opcional)
+    if len(memoria_ram) > 200:
+        memoria_ram.pop(0)
 
-Mensagem da usuária:
-{msg.texto}
+    # monta contexto
+    contexto = f"""
+{memoria_base_cache}
+
+Memória da conversa:
 """
 
+    for role, texto in memoria_ram:
+        contexto += f"{role}: {texto}\n"
+
+    # chama IA
     resposta = client.responses.create(
         model="gpt-5-mini",
-        input=prompt
+        input=contexto
     )
 
+    texto_resposta = resposta.output_text
+
+    # salva resposta na RAM
+    memoria_ram.append(("assistant", texto_resposta))
+
     return {
-        "resposta": resposta.output_text
+        "resposta": texto_resposta
     }
