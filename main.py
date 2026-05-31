@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from openai import OpenAI
 import psycopg2
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = FastAPI()
 
@@ -25,7 +25,7 @@ class Mensagem(BaseModel):
 
 
 # =========================
-# CARREGA MEMÓRIA BASE
+# MEMÓRIA BASE
 # =========================
 def carregar_memoria_base():
     if not DATABASE_URL:
@@ -50,6 +50,42 @@ def carregar_memoria_base():
 
 
 memoria_base_cache = carregar_memoria_base()
+
+
+# =========================
+# MEMÓRIA DE ONTEM
+# =========================
+def carregar_memoria_ontem():
+    if not DATABASE_URL:
+        return ""
+
+    try:
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        cur = conn.cursor()
+
+        ontem = datetime.now().date() - timedelta(days=1)
+
+        cur.execute("""
+            SELECT role, conteudo
+            FROM memoria_diario
+            WHERE data = %s
+            ORDER BY id
+        """, (ontem,))
+
+        dados = cur.fetchall()
+
+        cur.close()
+        conn.close()
+
+        if not dados:
+            return ""
+
+        linhas = [f"{r}: {t}" for r, t in dados]
+        return "\nMemória de ontem:\n" + "\n".join(linhas)
+
+    except Exception as e:
+        print("ERRO MEMÓRIA ONTEM:", e)
+        return ""
 
 
 # =========================
@@ -134,11 +170,17 @@ def chat(msg: Mensagem):
     if len(memoria_ram) > 200:
         memoria_ram.pop(0)
 
-    # monta contexto sem loop manual longo
+    # =========================
+    # CONTEXTO (BASE + ONTEM + RAM)
+    # =========================
+    memoria_ontem = carregar_memoria_ontem()
+
     conversa = "\n".join(f"{r}: {t}" for r, t in memoria_ram)
 
     prompt = f"""
 {memoria_base_cache}
+
+{memoria_ontem}
 
 Memória da conversa:
 {conversa}
