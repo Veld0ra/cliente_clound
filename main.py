@@ -115,7 +115,6 @@ def chat(msg: Mensagem):
     # =========================
     memoria_ram.append(("user", msg.texto))
 
-    # limite de segurança
     if len(memoria_ram) > 200:
         memoria_ram.pop(0)
 
@@ -143,5 +142,4 @@ def chat(msg: Mensagem):
 
     return {
         "resposta": texto_resposta
-    }_resposta
     }
