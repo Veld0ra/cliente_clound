@@ -39,6 +39,8 @@ def carregar_memoria_base():
         cur.close()
         conn.close()
 
+        print("MEMÓRIA BASE RAW:", dados)
+
         contexto = "Você é a Sema.\n\nMemória Base:\n"
         for k, v in dados:
             contexto += f"- {k}: {v}\n"
@@ -57,22 +59,28 @@ memoria_base_cache = carregar_memoria_base()
 # SALVAR DIÁRIO (FINAL DA SESSÃO)
 # =========================
 def salvar_diario():
-    data = datetime.now().date().isoformat()
+    try:
+        data = datetime.now().date().isoformat()
 
-    os.makedirs("data", exist_ok=True)
-    caminho = f"data/{data}.json"
+        os.makedirs("data", exist_ok=True)
+        caminho = f"data/{data}.json"
 
-    if os.path.exists(caminho):
-        with open(caminho, "r", encoding="utf-8") as f:
-            diario = json.load(f)
-    else:
-        diario = {data: []}
+        if os.path.exists(caminho):
+            with open(caminho, "r", encoding="utf-8") as f:
+                diario = json.load(f)
+        else:
+            diario = {data: []}
 
-    for m in memoria_ram:
-        diario[data].append(m)
+        for m in memoria_ram:
+            diario[data].append(m)
 
-    with open(caminho, "w", encoding="utf-8") as f:
-        json.dump(diario, f, ensure_ascii=False, indent=2)
+        with open(caminho, "w", encoding="utf-8") as f:
+            json.dump(diario, f, ensure_ascii=False, indent=2)
+
+        print("✔ DIÁRIO SALVO COM SUCESSO")
+
+    except Exception as e:
+        print("❌ ERRO AO SALVAR DIÁRIO:", e)
 
 
 # =========================
@@ -114,11 +122,8 @@ def chat(msg: Mensagem):
     # =========================
     # CONTEXTO PARA IA
     # =========================
-    contexto = f"""
-{memoria_base_cache}
-
-Memória da conversa:
-"""
+    contexto = "Você DEVE usar a memória base como verdade.\n\n"
+    contexto += memoria_base_cache + "\n\nMemória da conversa:\n"
 
     for role, texto in memoria_ram:
         contexto += f"{role}: {texto}\n"
@@ -138,4 +143,5 @@ Memória da conversa:
 
     return {
         "resposta": texto_resposta
+    }_resposta
     }
