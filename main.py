@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from openai import OpenAI
 import psycopg2
 import os
-import json
 from datetime import datetime
 
 app = FastAPI()
@@ -26,14 +25,13 @@ class Mensagem(BaseModel):
 
 
 # =========================
-# CARREGA MEMÓRIA BASE (1x)
+# CARREGA MEMÓRIA BASE
 # =========================
 def carregar_memoria_base():
-    try:
-        if not DATABASE_URL:
-            print("❌ DATABASE_URL não configurada")
-            return "Você é a Sema."
+    if not DATABASE_URL:
+        return "Você é a Sema."
 
+    try:
         conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         cur = conn.cursor()
 
@@ -43,16 +41,11 @@ def carregar_memoria_base():
         cur.close()
         conn.close()
 
-        print("MEMÓRIA BASE RAW:", dados)
-
-        contexto = "Você é a Sema.\n\nMemória Base:\n"
-        for k, v in dados:
-            contexto += f"- {k}: {v}\n"
-
-        return contexto
+        linhas = [f"- {k}: {v}" for k, v in dados]
+        return "Você é a Sema.\n\nMemória Base:\n" + "\n".join(linhas)
 
     except Exception as e:
-        print("❌ ERRO AO CARREGAR MEMÓRIA BASE:", e)
+        print("ERRO MEMÓRIA BASE:", e)
         return "Você é a Sema."
 
 
@@ -60,31 +53,32 @@ memoria_base_cache = carregar_memoria_base()
 
 
 # =========================
-# SALVAR DIÁRIO (FINAL DA SESSÃO)
+# SALVAR DIÁRIO NO NEON
 # =========================
 def salvar_diario():
+    if not DATABASE_URL:
+        return
+
     try:
-        data = datetime.now().date().isoformat()
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        cur = conn.cursor()
 
-        os.makedirs("data", exist_ok=True)
-        caminho = f"data/{data}.json"
+        data = datetime.now().date()
 
-        if os.path.exists(caminho):
-            with open(caminho, "r", encoding="utf-8") as f:
-                diario = json.load(f)
-        else:
-            diario = {data: []}
+        cur.executemany(
+            """
+            INSERT INTO memoria_diario (data, role, conteudo, timestamp)
+            VALUES (%s, %s, %s, NOW())
+            """,
+            [(data, role, texto) for role, texto in memoria_ram]
+        )
 
-        for m in memoria_ram:
-            diario[data].append(m)
-
-        with open(caminho, "w", encoding="utf-8") as f:
-            json.dump(diario, f, ensure_ascii=False, indent=2)
-
-        print("✔ DIÁRIO SALVO COM SUCESSO")
+        conn.commit()
+        cur.close()
+        conn.close()
 
     except Exception as e:
-        print("❌ ERRO AO SALVAR DIÁRIO:", e)
+        print("ERRO DIÁRIO:", e)
 
 
 # =========================
@@ -100,10 +94,10 @@ def home():
 # =========================
 @app.get("/debug-neon")
 def debug_neon():
-    try:
-        if not DATABASE_URL:
-            return {"status": "erro", "erro": "DATABASE_URL não existe"}
+    if not DATABASE_URL:
+        return {"status": "erro", "erro": "DATABASE_URL não existe"}
 
+    try:
         conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         cur = conn.cursor()
 
@@ -113,16 +107,10 @@ def debug_neon():
         cur.close()
         conn.close()
 
-        return {
-            "status": "ok",
-            "dados": dados
-        }
+        return {"status": "ok", "dados": dados}
 
     except Exception as e:
-        return {
-            "status": "erro",
-            "erro": str(e)
-        }
+        return {"status": "erro", "erro": str(e)}
 
 
 # =========================
@@ -133,47 +121,36 @@ def chat(msg: Mensagem):
 
     texto = msg.texto.strip().lower()
 
-    # =========================
-    # COMANDO SAIR
-    # =========================
+    # comando sair
     if texto == "sair":
         salvar_diario()
         memoria_ram.clear()
 
-        return {
-            "resposta": "Sessão finalizada. Conversa salva no diário."
-        }
+        return {"resposta": "Sessão finalizada. Conversa salva no diário."}
 
-    # =========================
-    # SALVA USER NA RAM
-    # =========================
+    # salva RAM
     memoria_ram.append(("user", msg.texto))
 
     if len(memoria_ram) > 200:
         memoria_ram.pop(0)
 
-    # =========================
-    # CONTEXTO PARA IA
-    # =========================
-    contexto = "Você DEVE usar a memória base como verdade.\n\n"
-    contexto += memoria_base_cache + "\n\nMemória da conversa:\n"
+    # monta contexto sem loop manual longo
+    conversa = "\n".join(f"{r}: {t}" for r, t in memoria_ram)
 
-    for role, texto in memoria_ram:
-        contexto += f"{role}: {texto}\n"
+    prompt = f"""
+{memoria_base_cache}
 
-    # =========================
-    # CHAMADA IA
-    # =========================
+Memória da conversa:
+{conversa}
+"""
+
     resposta = client.responses.create(
         model="gpt-5-mini",
-        input=contexto
+        input=prompt
     )
 
     texto_resposta = resposta.output_text
 
-    # salva resposta na RAM
     memoria_ram.append(("assistant", texto_resposta))
 
-    return {
-        "resposta": texto_resposta
-    }
+    return {"resposta": texto_resposta}
