@@ -4,6 +4,8 @@ from openai import OpenAI
 import psycopg2
 import os
 from datetime import datetime, timedelta
+import threading
+import time
 
 app = FastAPI()
 
@@ -15,9 +17,16 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 # =========================
-# RAM (sessão local)
+# RAM (conversa atual)
 # =========================
 memoria_ram = []
+
+
+# =========================
+# CACHE GLOBAL (NÃO CONSULTA NEON TODA HORA)
+# =========================
+memoria_base_cache = ""
+memoria_7dias_cache = ""
 
 
 class Mensagem(BaseModel):
@@ -25,7 +34,7 @@ class Mensagem(BaseModel):
 
 
 # =========================
-# MEMÓRIA BASE
+# MEMÓRIA BASE (1x)
 # =========================
 def carregar_memoria_base():
     if not DATABASE_URL:
@@ -49,11 +58,8 @@ def carregar_memoria_base():
         return "Você é a Sema."
 
 
-memoria_base_cache = carregar_memoria_base()
-
-
 # =========================
-# MEMÓRIA DOS ÚLTIMOS 7 DIAS (COMPLETA)
+# MEMÓRIA 7 DIAS (CACHE)
 # =========================
 def carregar_memoria_7_dias():
     if not DATABASE_URL:
@@ -90,6 +96,34 @@ def carregar_memoria_7_dias():
     except Exception as e:
         print("ERRO MEMÓRIA 7 DIAS:", e)
         return ""
+
+
+# =========================
+# ATUALIZA CACHE
+# =========================
+def atualizar_cache():
+    global memoria_base_cache, memoria_7dias_cache
+
+    print("🔄 Atualizando memória cache...")
+
+    memoria_base_cache = carregar_memoria_base()
+    memoria_7dias_cache = carregar_memoria_7_dias()
+
+
+# =========================
+# LOOP DE REFRESH (a cada 15 min)
+# =========================
+def loop_cache():
+    while True:
+        time.sleep(900)  # 15 minutos
+        atualizar_cache()
+
+
+# inicia cache no startup
+atualizar_cache()
+
+# thread para atualizar cache automaticamente
+threading.Thread(target=loop_cache, daemon=True).start()
 
 
 # =========================
@@ -130,7 +164,7 @@ def home():
 
 
 # =========================
-# DEBUG NEON
+# DEBUG
 # =========================
 @app.get("/debug-neon")
 def debug_neon():
@@ -174,17 +208,14 @@ def chat(msg: Mensagem):
     if len(memoria_ram) > 200:
         memoria_ram.pop(0)
 
-    # =========================
-    # CONTEXTO COMPLETO
-    # =========================
-    memoria_7_dias = carregar_memoria_7_dias()
-
+    # conversa atual
     conversa = "\n".join(f"{r}: {t}" for r, t in memoria_ram)
 
+    # prompt final (CACHE + RAM)
     prompt = f"""
 {memoria_base_cache}
 
-{memoria_7_dias}
+{memoria_7dias_cache}
 
 Memória da conversa:
 {conversa}
