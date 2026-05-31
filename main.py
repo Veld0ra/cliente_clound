@@ -53,9 +53,9 @@ memoria_base_cache = carregar_memoria_base()
 
 
 # =========================
-# MEMÓRIA DE 7 DIAS
+# MEMÓRIA DOS ÚLTIMOS 7 DIAS (COMPLETA)
 # =========================
-def carregar_memoria_semana():
+def carregar_memoria_7_dias():
     if not DATABASE_URL:
         return ""
 
@@ -66,10 +66,10 @@ def carregar_memoria_semana():
         data_limite = datetime.now().date() - timedelta(days=7)
 
         cur.execute("""
-            SELECT role, conteudo
+            SELECT data, role, conteudo
             FROM memoria_diario
             WHERE data >= %s
-            ORDER BY data, id
+            ORDER BY data ASC, id ASC
         """, (data_limite,))
 
         dados = cur.fetchall()
@@ -80,11 +80,15 @@ def carregar_memoria_semana():
         if not dados:
             return ""
 
-        linhas = [f"{r}: {t}" for r, t in dados]
-        return "\nMemória da semana:\n" + "\n".join(linhas)
+        contexto = "\nMemória dos últimos 7 dias:\n"
+
+        for data, role, conteudo in dados:
+            contexto += f"[{data}] {role}: {conteudo}\n"
+
+        return contexto
 
     except Exception as e:
-        print("ERRO MEMÓRIA SEMANA:", e)
+        print("ERRO MEMÓRIA 7 DIAS:", e)
         return ""
 
 
@@ -173,14 +177,14 @@ def chat(msg: Mensagem):
     # =========================
     # CONTEXTO COMPLETO
     # =========================
-    memoria_semana = carregar_memoria_semana()
+    memoria_7_dias = carregar_memoria_7_dias()
 
     conversa = "\n".join(f"{r}: {t}" for r, t in memoria_ram)
 
     prompt = f"""
 {memoria_base_cache}
 
-{memoria_semana}
+{memoria_7_dias}
 
 Memória da conversa:
 {conversa}
