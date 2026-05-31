@@ -53,9 +53,9 @@ memoria_base_cache = carregar_memoria_base()
 
 
 # =========================
-# MEMÓRIA DE ONTEM
+# MEMÓRIA DE 7 DIAS
 # =========================
-def carregar_memoria_ontem():
+def carregar_memoria_semana():
     if not DATABASE_URL:
         return ""
 
@@ -63,14 +63,14 @@ def carregar_memoria_ontem():
         conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         cur = conn.cursor()
 
-        ontem = datetime.now().date() - timedelta(days=1)
+        data_limite = datetime.now().date() - timedelta(days=7)
 
         cur.execute("""
             SELECT role, conteudo
             FROM memoria_diario
-            WHERE data = %s
-            ORDER BY id
-        """, (ontem,))
+            WHERE data >= %s
+            ORDER BY data, id
+        """, (data_limite,))
 
         dados = cur.fetchall()
 
@@ -81,10 +81,10 @@ def carregar_memoria_ontem():
             return ""
 
         linhas = [f"{r}: {t}" for r, t in dados]
-        return "\nMemória de ontem:\n" + "\n".join(linhas)
+        return "\nMemória da semana:\n" + "\n".join(linhas)
 
     except Exception as e:
-        print("ERRO MEMÓRIA ONTEM:", e)
+        print("ERRO MEMÓRIA SEMANA:", e)
         return ""
 
 
@@ -171,16 +171,16 @@ def chat(msg: Mensagem):
         memoria_ram.pop(0)
 
     # =========================
-    # CONTEXTO (BASE + ONTEM + RAM)
+    # CONTEXTO COMPLETO
     # =========================
-    memoria_ontem = carregar_memoria_ontem()
+    memoria_semana = carregar_memoria_semana()
 
     conversa = "\n".join(f"{r}: {t}" for r, t in memoria_ram)
 
     prompt = f"""
 {memoria_base_cache}
 
-{memoria_ontem}
+{memoria_semana}
 
 Memória da conversa:
 {conversa}
