@@ -12,38 +12,46 @@ client = OpenAI(
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+
 class Mensagem(BaseModel):
     texto: str
 
 
 def carregar_memoria():
-    conn = psycopg2.connect(DATABASE_URL)
-    cur = conn.cursor()
+    try:
+        if not DATABASE_URL:
+            print("DATABASE_URL não encontrada")
+            return "Você é Sema."
 
-    cur.execute("SELECT chave, valor FROM memoria_base")
-    memoria_base = cur.fetchall()
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        cur = conn.cursor()
 
-    cur.execute(
-        "SELECT categoria, conteudo FROM memoria_permanente"
-    )
-    memoria_permanente = cur.fetchall()
+        # Memória base
+        cur.execute("SELECT chave, valor FROM memoria_base")
+        memoria_base = cur.fetchall()
 
-    cur.close()
-    conn.close()
+        # Memória permanente
+        cur.execute("SELECT categoria, conteudo FROM memoria_permanente")
+        memoria_permanente = cur.fetchall()
 
-    contexto = "Você é Sema.\n\n"
+        cur.close()
+        conn.close()
 
-    contexto += "Memória Base:\n"
+        contexto = "Você é Sema.\n\n"
 
-    for chave, valor in memoria_base:
-        contexto += f"{chave}: {valor}\n"
+        contexto += "Memória Base:\n"
+        for chave, valor in memoria_base:
+            contexto += f"- {chave}: {valor}\n"
 
-    contexto += "\nMemória Permanente:\n"
+        contexto += "\nMemória Permanente:\n"
+        for categoria, conteudo in memoria_permanente:
+            contexto += f"- {categoria}: {conteudo}\n"
 
-    for categoria, conteudo in memoria_permanente:
-        contexto += f"- {categoria}: {conteudo}\n"
+        return contexto
 
-    return contexto
+    except Exception as e:
+        print("ERRO AO CARREGAR MEMÓRIA:", e)
+        return "Você é Sema."
 
 
 @app.get("/")
