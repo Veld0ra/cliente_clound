@@ -92,6 +92,33 @@ def home():
 
 
 # =========================
+# DEBUG NEON (NOVO)
+# =========================
+@app.get("/debug-neon")
+def debug_neon():
+    try:
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        cur = conn.cursor()
+
+        cur.execute("SELECT chave, valor FROM memoria_base")
+        dados = cur.fetchall()
+
+        cur.close()
+        conn.close()
+
+        return {
+            "status": "ok",
+            "dados": dados
+        }
+
+    except Exception as e:
+        return {
+            "status": "erro",
+            "erro": str(e)
+        }
+
+
+# =========================
 # CHAT
 # =========================
 @app.post("/chat")
