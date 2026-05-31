@@ -12,9 +12,15 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 # =========================
-# RAM (sessão da conversa)
+# RAM DA SESSÃO
 # =========================
 memoria_ram = []
+
+# =========================
+# CACHE GLOBAL (IMPORTANTE)
+# =========================
+memoria_base_cache = ""
+memoria_ontem_cache = ""
 
 
 class Mensagem(BaseModel):
@@ -22,12 +28,9 @@ class Mensagem(BaseModel):
 
 
 # =========================
-# MEMÓRIA BASE
+# CARREGA BASE (SÓ NO START)
 # =========================
 def carregar_memoria_base():
-    if not DATABASE_URL:
-        return "Você é a Sema."
-
     conn = psycopg2.connect(DATABASE_URL, sslmode="require")
     cur = conn.cursor()
 
@@ -37,17 +40,13 @@ def carregar_memoria_base():
     cur.close()
     conn.close()
 
-    linhas = [f"- {k}: {v}" for k, v in dados]
-    return "Você é a Sema.\n\nMemória Base:\n" + "\n".join(linhas)
+    return "Você é a Sema.\n\n" + "\n".join([f"- {k}: {v}" for k, v in dados])
 
 
 # =========================
-# MEMÓRIA DE ONTEM
+# CARREGA ONTEM (SÓ NO START)
 # =========================
 def carregar_memoria_ontem():
-    if not DATABASE_URL:
-        return ""
-
     conn = psycopg2.connect(DATABASE_URL, sslmode="require")
     cur = conn.cursor()
 
@@ -65,15 +64,67 @@ def carregar_memoria_ontem():
     cur.close()
     conn.close()
 
-    if not dados:
-        return ""
-
-    linhas = [f"{r}: {t}" for r, t in dados]
-    return "\nMemória de ontem:\n" + "\n".join(linhas)
+    return "\n".join([f"{r}: {t}" for r, t in dados])
 
 
 # =========================
-# SALVAR NO DIÁRIO
+# START (AQUI CARREGA TUDO UMA VEZ)
+# =========================
+@app.get("/start")
+def start():
+    global memoria_base_cache, memoria_ontem_cache
+
+    memoria_ram.clear()
+
+    memoria_base_cache = carregar_memoria_base()
+    memoria_ontem_cache = carregar_memoria_ontem()
+
+    return {
+        "status": "ok",
+        "memoria_base": memoria_base_cache,
+        "memoria_ontem": memoria_ontem_cache
+    }
+
+
+# =========================
+# CHAT (SEM BANCO AQUI)
+# =========================
+@app.post("/chat")
+def chat(msg: Mensagem):
+
+    texto = msg.texto.strip().lower()
+
+    if texto == "sair":
+        salvar_diario()
+        memoria_ram.clear()
+        return {"resposta": "Sessão finalizada. Conversa salva no diário."}
+
+    memoria_ram.append(("user", msg.texto))
+
+    contexto = f"""
+{memoria_base_cache}
+
+Memória de ontem:
+{memoria_ontem_cache}
+
+Memória atual:
+{chr(10).join(f"{r}: {t}" for r, t in memoria_ram[-10:])}
+"""
+
+    resposta = client.responses.create(
+        model="gpt-5-mini",
+        input=contexto
+    )
+
+    texto_resposta = resposta.output_text
+
+    memoria_ram.append(("assistant", texto_resposta))
+
+    return {"resposta": texto_resposta}
+
+
+# =========================
+# SALVAR DIÁRIO
 # =========================
 def salvar_diario():
     if not DATABASE_URL:
@@ -89,84 +140,9 @@ def salvar_diario():
         INSERT INTO memoria_diario (data, role, conteudo, timestamp)
         VALUES (%s, %s, %s, NOW())
         """,
-        [(data, role, texto) for role, texto in memoria_ram]
+        [(data, r, t) for r, t in memoria_ram]
     )
 
     conn.commit()
     cur.close()
     conn.close()
-
-
-# =========================
-# START DA SESSÃO
-# =========================
-@app.get("/start")
-def start():
-    memoria_ram.clear()
-
-    base = carregar_memoria_base()
-    ontem = carregar_memoria_ontem()
-
-    return {
-        "memoria_base": base,
-        "memoria_ontem": ontem
-    }
-
-
-# =========================
-# CHAT
-# =========================
-@app.post("/chat")
-def chat(msg: Mensagem):
-
-    texto = msg.texto.strip().lower()
-
-    # sair = finaliza sessão
-    if texto == "sair":
-        salvar_diario()
-        memoria_ram.clear()
-        return {"resposta": "Sessão finalizada. Conversa salva no diário."}
-
-    # salva RAM
-    memoria_ram.append(("user", msg.texto))
-
-    if len(memoria_ram) > 200:
-        memoria_ram.pop(0)
-
-    conversa = "\n".join(f"{r}: {t}" for r, t in memoria_ram[-20:])
-
-    prompt = f"""
-Memória da conversa:
-{conversa}
-"""
-
-    resposta = client.responses.create(
-        model="gpt-5-mini",
-        input=prompt
-    )
-
-    texto_resposta = resposta.output_text
-
-    memoria_ram.append(("assistant", texto_resposta))
-
-    return {"resposta": texto_resposta}
-
-
-# =========================
-# DEBUG
-# =========================
-@app.get("/debug-neon")
-def debug():
-    if not DATABASE_URL:
-        return {"status": "erro", "erro": "DATABASE_URL não existe"}
-
-    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
-    cur = conn.cursor()
-
-    cur.execute("SELECT chave, valor FROM memoria_base")
-    dados = cur.fetchall()
-
-    cur.close()
-    conn.close()
-
-    return {"status": "ok", "dados": dados}
