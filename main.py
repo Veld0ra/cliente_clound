@@ -7,7 +7,10 @@ from datetime import datetime, timedelta
 
 app = FastAPI()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY")
+)
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 
@@ -17,7 +20,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 memoria_ram = []
 
 # =========================
-# CACHE GLOBAL (IMPORTANTE)
+# CACHE GLOBAL
 # =========================
 memoria_base_cache = ""
 memoria_ontem_cache = ""
@@ -28,51 +31,80 @@ class Mensagem(BaseModel):
 
 
 # =========================
-# CARREGA BASE (SÓ NO START)
+# MEMÓRIA BASE
 # =========================
 def carregar_memoria_base():
-    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
-    cur = conn.cursor()
 
-    cur.execute("SELECT chave, valor FROM memoria_base")
-    dados = cur.fetchall()
+    if not DATABASE_URL:
+        return "Você é a Sema."
 
-    cur.close()
-    conn.close()
+    try:
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        cur = conn.cursor()
 
-    return "Você é a Sema.\n\n" + "\n".join([f"- {k}: {v}" for k, v in dados])
+        cur.execute("""
+            SELECT chave, valor
+            FROM memoria_base
+        """)
+
+        dados = cur.fetchall()
+
+        cur.close()
+        conn.close()
+
+        return (
+            "Você é a Sema.\n\n"
+            + "\n".join(f"- {k}: {v}" for k, v in dados)
+        )
+
+    except Exception as e:
+        print("ERRO MEMÓRIA BASE:", e)
+        return "Você é a Sema."
 
 
 # =========================
-# CARREGA ONTEM (SÓ NO START)
+# MEMÓRIA DE ONTEM
 # =========================
 def carregar_memoria_ontem():
-    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
-    cur = conn.cursor()
 
-    ontem = datetime.now().date() - timedelta(days=1)
+    if not DATABASE_URL:
+        return ""
 
-    cur.execute("""
-        SELECT role, conteudo
-        FROM memoria_diario
-        WHERE data = %s
-        ORDER BY id ASC
-    """, (ontem,))
+    try:
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        cur = conn.cursor()
 
-    dados = cur.fetchall()
+        ontem = datetime.now().date() - timedelta(days=1)
 
-    cur.close()
-    conn.close()
+        cur.execute("""
+            SELECT conteudo
+            FROM memoria_diario_v2
+            WHERE data = %s
+        """, (ontem,))
 
-    return "\n".join([f"{r}: {t}" for r, t in dados])
+        resultado = cur.fetchone()
+
+        cur.close()
+        conn.close()
+
+        if resultado:
+            return resultado[0]
+
+        return ""
+
+    except Exception as e:
+        print("ERRO MEMÓRIA ONTEM:", e)
+        return ""
 
 
 # =========================
-# START (AQUI CARREGA TUDO UMA VEZ)
+# START DA SESSÃO
 # =========================
 @app.get("/start")
 def start():
-    global memoria_base_cache, memoria_ontem_cache
+
+    global memoria_base_cache
+    global memoria_ontem_cache
 
     memoria_ram.clear()
 
@@ -87,7 +119,15 @@ def start():
 
 
 # =========================
-# CHAT (SEM BANCO AQUI)
+# HOME
+# =========================
+@app.get("/")
+def home():
+    return {"status": "online"}
+
+
+# =========================
+# CHAT
 # =========================
 @app.post("/chat")
 def chat(msg: Mensagem):
@@ -95,9 +135,13 @@ def chat(msg: Mensagem):
     texto = msg.texto.strip().lower()
 
     if texto == "sair":
+
         salvar_diario()
         memoria_ram.clear()
-        return {"resposta": "Sessão finalizada. Conversa salva no diário."}
+
+        return {
+            "resposta": "Sessão finalizada. Conversa salva no diário."
+        }
 
     memoria_ram.append(("user", msg.texto))
 
@@ -120,29 +164,48 @@ Memória atual:
 
     memoria_ram.append(("assistant", texto_resposta))
 
-    return {"resposta": texto_resposta}
+    return {
+        "resposta": texto_resposta
+    }
 
 
 # =========================
 # SALVAR DIÁRIO
 # =========================
 def salvar_diario():
-    if not DATABASE_URL:
+
+    if not DATABASE_URL or not memoria_ram:
         return
 
-    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
-    cur = conn.cursor()
+    try:
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        cur = conn.cursor()
 
-    data = datetime.now().date()
+        data = datetime.now().date()
 
-    cur.executemany(
-        """
-        INSERT INTO memoria_diario (data, role, conteudo, timestamp)
-        VALUES (%s, %s, %s, NOW())
-        """,
-        [(data, r, t) for r, t in memoria_ram]
-    )
+        sessao = "=== SESSÃO ===\n\n"
+        sessao += "\n".join(
+            f"{role}: {texto}"
+            for role, texto in memoria_ram
+        )
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        cur.execute("""
+            INSERT INTO memoria_diario_v2 (data, conteudo)
+            VALUES (%s, %s)
+
+            ON CONFLICT (data)
+            DO UPDATE SET
+            conteudo = memoria_diario_v2.conteudo
+                       || E'\n\n'
+                       || EXCLUDED.conteudo
+        """, (data, sessao))
+
+        conn.commit()
+
+        cur.close()
+        conn.close()
+
+        print("✔ Diário salvo")
+
+    except Exception as e:
+        print("❌ ERRO DIÁRIO:", e)
