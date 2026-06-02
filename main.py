@@ -147,13 +147,20 @@ def chat(msg: Mensagem):
             "resposta": "Sessão finalizada. Conversa salva no diário."
         }
 
+    # Salva mensagem do usuário
     memoria_ram.append(("user", texto))
 
+    # Limita RAM para evitar crescimento infinito
+    if len(memoria_ram) > 100:
+        memoria_ram.pop(0)
+
+    # Últimas mensagens da conversa atual
     conversa_atual = "\n".join(
         f"{role}: {conteudo}"
         for role, conteudo in memoria_ram[-10:]
     )
 
+    # Contexto enviado para a IA
     contexto = f"""
 {INSTRUCOES_SEMA}
 
@@ -173,12 +180,19 @@ Memória atual:
 
     texto_resposta = resposta.output_text.strip()
 
+    # Debug para futura busca de memória
+    if texto_resposta == "[CONSULTAR_MEMORIA]":
+        print("🔎 IA solicitou consulta de memória")
+
+    # Salva resposta na RAM
     memoria_ram.append(("assistant", texto_resposta))
+
+    if len(memoria_ram) > 100:
+        memoria_ram.pop(0)
 
     return {
         "resposta": texto_resposta
     }
-
 
 # =========================
 # SALVAR DIÁRIO
