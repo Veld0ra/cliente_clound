@@ -30,6 +30,120 @@ memoria_ontem_cache = ""
 class Mensagem(BaseModel):
     texto: str
 
+class ConsultaMemoria(BaseModel):
+    tipo: str
+    data: str | None = None
+
+# =========================
+# CONSULTAR MEMÓRIA ANTIGA
+# =========================
+@app.post("/consultar-memoria")
+def consultar_memoria(req: ConsultaMemoria):
+
+    if not DATABASE_URL:
+        return {
+            "resultado": "Banco de dados não configurado."
+        }
+
+    try:
+
+        conn = psycopg2.connect(
+            DATABASE_URL,
+            sslmode="require"
+        )
+
+        cur = conn.cursor()
+
+        hoje = datetime.now().date()
+
+        if req.tipo == "7dias":
+
+            data_inicio = hoje - timedelta(days=7)
+
+            cur.execute("""
+                SELECT data, conteudo
+                FROM memoria_diario_v2
+                WHERE data >= %s
+                ORDER BY data ASC
+            """, (data_inicio,))
+
+        elif req.tipo == "mes":
+
+            data_inicio = hoje - timedelta(days=30)
+
+            cur.execute("""
+                SELECT data, conteudo
+                FROM memoria_diario_v2
+                WHERE data >= %s
+                ORDER BY data ASC
+            """, (data_inicio,))
+
+        elif req.tipo == "3meses":
+
+            data_inicio = hoje - timedelta(days=90)
+
+            cur.execute("""
+                SELECT data, conteudo
+                FROM memoria_diario_v2
+                WHERE data >= %s
+                ORDER BY data ASC
+            """, (data_inicio,))
+
+        elif req.tipo == "data":
+
+            cur.execute("""
+                SELECT data, conteudo
+                FROM memoria_diario_v2
+                WHERE data = %s
+            """, (req.data,))
+
+        elif req.tipo == "tudo":
+
+            cur.execute("""
+                SELECT data, conteudo
+                FROM memoria_diario_v2
+                ORDER BY data ASC
+            """)
+
+        else:
+
+            cur.close()
+            conn.close()
+
+            return {
+                "resultado": "Tipo inválido."
+            }
+
+        resultados = cur.fetchall()
+
+        cur.close()
+        conn.close()
+
+        if not resultados:
+            return {
+                "resultado": "Nenhuma memória encontrada."
+            }
+
+        texto = ""
+
+        for data_memoria, conteudo in resultados:
+
+            texto += f"\n=== {data_memoria} ===\n"
+            texto += conteudo
+            texto += "\n"
+
+        return {
+            "resultado": texto
+        }
+
+    except Exception as e:
+
+        print("ERRO CONSULTA:", e)
+
+        return {
+            "resultado": f"Erro: {e}"
+        }
+
 
 # =========================
 # MEMÓRIA BASE
