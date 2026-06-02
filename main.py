@@ -20,6 +20,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # =========================
 memoria_ram = []
 
+
 # =========================
 # CACHE GLOBAL
 # =========================
@@ -27,122 +28,16 @@ memoria_base_cache = ""
 memoria_ontem_cache = ""
 
 
+# =========================
+# MODELS
+# =========================
 class Mensagem(BaseModel):
     texto: str
+
 
 class ConsultaMemoria(BaseModel):
     tipo: str
     data: str | None = None
-
-# =========================
-# CONSULTAR MEMÓRIA ANTIGA
-# =========================
-@app.post("/consultar-memoria")
-def consultar_memoria(req: ConsultaMemoria):
-
-    if not DATABASE_URL:
-        return {
-            "resultado": "Banco de dados não configurado."
-        }
-
-    try:
-
-        conn = psycopg2.connect(
-            DATABASE_URL,
-            sslmode="require"
-        )
-
-        cur = conn.cursor()
-
-        hoje = datetime.now().date()
-
-        if req.tipo == "7dias":
-
-            data_inicio = hoje - timedelta(days=7)
-
-            cur.execute("""
-                SELECT data, conteudo
-                FROM memoria_diario_v2
-                WHERE data >= %s
-                ORDER BY data ASC
-            """, (data_inicio,))
-
-        elif req.tipo == "mes":
-
-            data_inicio = hoje - timedelta(days=30)
-
-            cur.execute("""
-                SELECT data, conteudo
-                FROM memoria_diario_v2
-                WHERE data >= %s
-                ORDER BY data ASC
-            """, (data_inicio,))
-
-        elif req.tipo == "3meses":
-
-            data_inicio = hoje - timedelta(days=90)
-
-            cur.execute("""
-                SELECT data, conteudo
-                FROM memoria_diario_v2
-                WHERE data >= %s
-                ORDER BY data ASC
-            """, (data_inicio,))
-
-        elif req.tipo == "data":
-
-            cur.execute("""
-                SELECT data, conteudo
-                FROM memoria_diario_v2
-                WHERE data = %s
-            """, (req.data,))
-
-        elif req.tipo == "tudo":
-
-            cur.execute("""
-                SELECT data, conteudo
-                FROM memoria_diario_v2
-                ORDER BY data ASC
-            """)
-
-        else:
-
-            cur.close()
-            conn.close()
-
-            return {
-                "resultado": "Tipo inválido."
-            }
-
-        resultados = cur.fetchall()
-
-        cur.close()
-        conn.close()
-
-        if not resultados:
-            return {
-                "resultado": "Nenhuma memória encontrada."
-            }
-
-        texto = ""
-
-        for data_memoria, conteudo in resultados:
-
-            texto += f"\n=== {data_memoria} ===\n"
-            texto += conteudo
-            texto += "\n"
-
-        return {
-            "resultado": texto
-        }
-
-    except Exception as e:
-
-        print("ERRO CONSULTA:", e)
-
-        return {
-            "resultado": f"Erro: {e}"
-        }
 
 
 # =========================
@@ -202,10 +97,7 @@ def carregar_memoria_ontem():
         cur.close()
         conn.close()
 
-        if resultado:
-            return resultado[0]
-
-        return ""
+        return resultado[0] if resultado else ""
 
     except Exception as e:
         print("ERRO MEMÓRIA ONTEM:", e)
@@ -213,13 +105,12 @@ def carregar_memoria_ontem():
 
 
 # =========================
-# START DA SESSÃO
+# START
 # =========================
 @app.get("/start")
 def start():
 
-    global memoria_base_cache
-    global memoria_ontem_cache
+    global memoria_base_cache, memoria_ontem_cache
 
     memoria_ram.clear()
 
@@ -234,6 +125,97 @@ def start():
         "memoria_base": memoria_base_cache,
         "memoria_ontem": memoria_ontem_cache
     }
+
+
+# =========================
+# CONSULTAR MEMÓRIA
+# =========================
+@app.post("/consultar-memoria")
+def consultar_memoria(req: ConsultaMemoria):
+
+    if not DATABASE_URL:
+        return {"resultado": "Banco de dados não configurado."}
+
+    try:
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        cur = conn.cursor()
+
+        hoje = datetime.now().date()
+
+        if req.tipo == "7dias":
+            data_inicio = hoje - timedelta(days=7)
+
+            cur.execute("""
+                SELECT data, conteudo
+                FROM memoria_diario_v2
+                WHERE data >= %s
+                ORDER BY data ASC
+                LIMIT 100
+            """, (data_inicio,))
+
+        elif req.tipo == "mes":
+            data_inicio = hoje - timedelta(days=30)
+
+            cur.execute("""
+                SELECT data, conteudo
+                FROM memoria_diario_v2
+                WHERE data >= %s
+                ORDER BY data ASC
+                LIMIT 200
+            """, (data_inicio,))
+
+        elif req.tipo == "3meses":
+            data_inicio = hoje - timedelta(days=90)
+
+            cur.execute("""
+                SELECT data, conteudo
+                FROM memoria_diario_v2
+                WHERE data >= %s
+                ORDER BY data ASC
+                LIMIT 300
+            """, (data_inicio,))
+
+        elif req.tipo == "data":
+
+            if not req.data:
+                return {"resultado": "Data não fornecida (YYYY-MM-DD)"}
+
+            cur.execute("""
+                SELECT data, conteudo
+                FROM memoria_diario_v2
+                WHERE data = %s
+            """, (req.data,))
+
+        elif req.tipo == "tudo":
+
+            cur.execute("""
+                SELECT data, conteudo
+                FROM memoria_diario_v2
+                ORDER BY data ASC
+                LIMIT 500
+            """)
+
+        else:
+            return {"resultado": "Tipo inválido."}
+
+        resultados = cur.fetchall()
+
+        cur.close()
+        conn.close()
+
+        if not resultados:
+            return {"resultado": "Nenhuma memória encontrada."}
+
+        texto = ""
+
+        for data_memoria, conteudo in resultados:
+            texto += f"\n=== {data_memoria} ===\n{conteudo}\n"
+
+        return {"resultado": texto}
+
+    except Exception as e:
+        print("ERRO CONSULTA:", e)
+        return {"resultado": f"Erro: {e}"}
 
 
 # =========================
@@ -253,7 +235,6 @@ def chat(msg: Mensagem):
     texto = msg.texto.strip()
 
     if texto.lower() == "sair":
-
         salvar_diario()
         memoria_ram.clear()
 
@@ -261,20 +242,16 @@ def chat(msg: Mensagem):
             "resposta": "Sessão finalizada. Conversa salva no diário."
         }
 
-    # Salva mensagem do usuário
     memoria_ram.append(("user", texto))
 
-    # Limita RAM para evitar crescimento infinito
     if len(memoria_ram) > 100:
         memoria_ram.pop(0)
 
-    # Últimas mensagens da conversa atual
     conversa_atual = "\n".join(
         f"{role}: {conteudo}"
         for role, conteudo in memoria_ram[-10:]
     )
 
-    # Contexto enviado para a IA
     contexto = f"""
 {INSTRUCOES_SEMA}
 
@@ -294,29 +271,20 @@ Memória atual:
 
     texto_resposta = resposta.output_text.strip()
 
-    # Debug para futura busca de memória
-    if texto_resposta == "[CONSULTAR_MEMORIA]":
-        print("🔎 IA solicitou consulta de memória")
-
-    # Salva resposta na RAM
     memoria_ram.append(("assistant", texto_resposta))
 
     if len(memoria_ram) > 100:
         memoria_ram.pop(0)
 
-    return {
-        "resposta": texto_resposta
-    }
+    return {"resposta": texto_resposta}
+
 
 # =========================
 # SALVAR DIÁRIO
 # =========================
 def salvar_diario():
 
-    if not DATABASE_URL:
-        return
-
-    if not memoria_ram:
+    if not DATABASE_URL or not memoria_ram:
         return
 
     try:
@@ -334,7 +302,6 @@ def salvar_diario():
         cur.execute("""
             INSERT INTO memoria_diario_v2 (data, conteudo)
             VALUES (%s, %s)
-
             ON CONFLICT (data)
             DO UPDATE SET
             conteudo = memoria_diario_v2.conteudo
@@ -343,7 +310,6 @@ def salvar_diario():
         """, (data, sessao))
 
         conn.commit()
-
         cur.close()
         conn.close()
 
