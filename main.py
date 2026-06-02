@@ -4,6 +4,7 @@ from openai import OpenAI
 import psycopg2
 import os
 from datetime import datetime, timedelta
+from instrucoes import INSTRUCOES_SEMA
 
 app = FastAPI()
 
@@ -111,6 +112,9 @@ def start():
     memoria_base_cache = carregar_memoria_base()
     memoria_ontem_cache = carregar_memoria_ontem()
 
+    print("✔ Memória Base carregada")
+    print("✔ Memória de ontem carregada")
+
     return {
         "status": "ok",
         "memoria_base": memoria_base_cache,
@@ -132,9 +136,9 @@ def home():
 @app.post("/chat")
 def chat(msg: Mensagem):
 
-    texto = msg.texto.strip().lower()
+    texto = msg.texto.strip()
 
-    if texto == "sair":
+    if texto.lower() == "sair":
 
         salvar_diario()
         memoria_ram.clear()
@@ -143,16 +147,23 @@ def chat(msg: Mensagem):
             "resposta": "Sessão finalizada. Conversa salva no diário."
         }
 
-    memoria_ram.append(("user", msg.texto))
+    memoria_ram.append(("user", texto))
+
+    conversa_atual = "\n".join(
+        f"{role}: {conteudo}"
+        for role, conteudo in memoria_ram[-10:]
+    )
 
     contexto = f"""
+{INSTRUCOES_SEMA}
+
 {memoria_base_cache}
 
 Memória de ontem:
 {memoria_ontem_cache}
 
 Memória atual:
-{chr(10).join(f"{r}: {t}" for r, t in memoria_ram[-10:])}
+{conversa_atual}
 """
 
     resposta = client.responses.create(
@@ -160,7 +171,7 @@ Memória atual:
         input=contexto
     )
 
-    texto_resposta = resposta.output_text
+    texto_resposta = resposta.output_text.strip()
 
     memoria_ram.append(("assistant", texto_resposta))
 
@@ -174,7 +185,10 @@ Memória atual:
 # =========================
 def salvar_diario():
 
-    if not DATABASE_URL or not memoria_ram:
+    if not DATABASE_URL:
+        return
+
+    if not memoria_ram:
         return
 
     try:
