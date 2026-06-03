@@ -5,15 +5,17 @@ import psycopg2
 import os
 from datetime import datetime, timedelta
 from instrucoes import INSTRUCOES_SEMA
+from inicializacao import router
 
 app = FastAPI()
+
+app.include_router(router)
 
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
 )
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-
 
 # =========================
 # RAM DA SESSÃO
