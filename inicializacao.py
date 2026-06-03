@@ -76,10 +76,11 @@ def novo_usuario(usuario: Usuario):
 
         cur.execute("""
             INSERT INTO usuarios
-            (nome, memoria)
-            VALUES (%s, %s)
+            (nome, pronome, memoria)
+            VALUES (%s, %s, %s)
         """, (
             usuario.nome,
+            "não informado",
             "..."
         ))
 
