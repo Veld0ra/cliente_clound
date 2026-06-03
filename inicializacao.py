@@ -14,6 +14,8 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 class Usuario(BaseModel):
     nome: str
+    pronome: str
+    memoria: str
 
 
 # =========================
@@ -24,12 +26,7 @@ class Usuario(BaseModel):
 def listar_usuarios():
 
     try:
-
-        conn = psycopg2.connect(
-            DATABASE_URL,
-            sslmode="require"
-        )
-
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         cur = conn.cursor()
 
         cur.execute("""
@@ -52,10 +49,7 @@ def listar_usuarios():
         ]
 
     except Exception as e:
-
-        return {
-            "erro": str(e)
-        }
+        return {"erro": str(e)}
 
 
 # =========================
@@ -65,32 +59,30 @@ def listar_usuarios():
 @router.post("/novo-usuario")
 def novo_usuario(usuario: Usuario):
 
-    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
-    cur = conn.cursor()
+    try:
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        cur = conn.cursor()
 
-    cur.execute("""
-        INSERT INTO usuarios (nome, memoria, ultimo_acesso, pronome)
-        VALUES (%s, %s, NOW(), %s)
-    """, (
-        usuario.nome,
-        usuario.memoria,
-        usuario.pronome
-    ))
+        cur.execute("""
+            INSERT INTO usuarios (nome, memoria, ultimo_acesso, pronome)
+            VALUES (%s, %s, NOW(), %s)
+        """, (
+            usuario.nome,
+            usuario.memoria,
+            usuario.pronome
+        ))
 
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    return {
-        "status": "ok",
-        "nome": usuario.nome
-    }
-
-    except Exception as e:
+        conn.commit()
+        cur.close()
+        conn.close()
 
         return {
-            "erro": str(e)
+            "status": "ok",
+            "nome": usuario.nome
         }
+
+    except Exception as e:
+        return {"erro": str(e)}
 
 
 # =========================
@@ -101,12 +93,7 @@ def novo_usuario(usuario: Usuario):
 def login(usuario: Usuario):
 
     try:
-
-        conn = psycopg2.connect(
-            DATABASE_URL,
-            sslmode="require"
-        )
-
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         cur = conn.cursor()
 
         cur.execute("""
@@ -121,10 +108,7 @@ def login(usuario: Usuario):
         conn.close()
 
         if not resultado:
-
-            return {
-                "erro": "Usuário não encontrado"
-            }
+            return {"erro": "Usuário não encontrado"}
 
         nome, pronome, memoria = resultado
 
@@ -136,7 +120,4 @@ def login(usuario: Usuario):
         }
 
     except Exception as e:
-
-        return {
-            "erro": str(e)
-        }
+        return {"erro": str(e)}
