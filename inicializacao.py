@@ -65,34 +65,26 @@ def listar_usuarios():
 @router.post("/novo-usuario")
 def novo_usuario(usuario: Usuario):
 
-    try:
+    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+    cur = conn.cursor()
 
-        conn = psycopg2.connect(
-            DATABASE_URL,
-            sslmode="require"
-        )
+    cur.execute("""
+        INSERT INTO usuarios (nome, memoria, ultimo_acesso, pronome)
+        VALUES (%s, %s, NOW(), %s)
+    """, (
+        usuario.nome,
+        usuario.memoria,
+        usuario.pronome
+    ))
 
-        cur = conn.cursor()
+    conn.commit()
+    cur.close()
+    conn.close()
 
-        cur.execute("""
-            INSERT INTO usuarios
-            (nome, pronome, memoria)
-            VALUES (%s, %s, %s)
-        """, (
-            usuario.nome,
-            "não informado",
-            "..."
-        ))
-
-        conn.commit()
-
-        cur.close()
-        conn.close()
-
-        return {
-            "status": "ok",
-            "nome": usuario.nome
-        }
+    return {
+        "status": "ok",
+        "nome": usuario.nome
+    }
 
     except Exception as e:
 
