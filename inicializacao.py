@@ -9,13 +9,17 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 # =========================
-# MODEL
+# MODELS
 # =========================
 
 class Usuario(BaseModel):
     nome: str
     pronome: str
     memoria: str
+
+
+class Login(BaseModel):
+    nome: str
 
 
 # =========================
@@ -26,13 +30,18 @@ class Usuario(BaseModel):
 def listar_usuarios():
 
     try:
-        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+
+        conn = psycopg2.connect(
+            DATABASE_URL,
+            sslmode="require"
+        )
+
         cur = conn.cursor()
 
         cur.execute("""
             SELECT id, nome
             FROM usuarios
-            ORDER BY nome
+            ORDER BY id
         """)
 
         usuarios = cur.fetchall()
@@ -49,7 +58,10 @@ def listar_usuarios():
         ]
 
     except Exception as e:
-        return {"erro": str(e)}
+
+        return {
+            "erro": str(e)
+        }
 
 
 # =========================
@@ -60,12 +72,18 @@ def listar_usuarios():
 def novo_usuario(usuario: Usuario):
 
     try:
-        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+
+        conn = psycopg2.connect(
+            DATABASE_URL,
+            sslmode="require"
+        )
+
         cur = conn.cursor()
 
         cur.execute("""
-            INSERT INTO usuarios (nome, memoria, ultimo_acesso, pronome)
-            VALUES (%s, %s, NOW(), %s)
+            INSERT INTO usuarios
+            (nome, memoria, pronome, ultimo_acesso)
+            VALUES (%s, %s, %s, NOW())
         """, (
             usuario.nome,
             usuario.memoria,
@@ -73,6 +91,7 @@ def novo_usuario(usuario: Usuario):
         ))
 
         conn.commit()
+
         cur.close()
         conn.close()
 
@@ -82,7 +101,10 @@ def novo_usuario(usuario: Usuario):
         }
 
     except Exception as e:
-        return {"erro": str(e)}
+
+        return {
+            "erro": str(e)
+        }
 
 
 # =========================
@@ -90,25 +112,47 @@ def novo_usuario(usuario: Usuario):
 # =========================
 
 @router.post("/login")
-def login(usuario: Usuario):
+def login(usuario: Login):
 
     try:
-        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+
+        conn = psycopg2.connect(
+            DATABASE_URL,
+            sslmode="require"
+        )
+
         cur = conn.cursor()
 
+        # Atualiza último acesso
+        cur.execute("""
+            UPDATE usuarios
+            SET ultimo_acesso = NOW()
+            WHERE nome = %s
+        """, (
+            usuario.nome,
+        ))
+
+        # Busca dados do usuário
         cur.execute("""
             SELECT nome, pronome, memoria
             FROM usuarios
             WHERE nome = %s
-        """, (usuario.nome,))
+        """, (
+            usuario.nome,
+        ))
 
         resultado = cur.fetchone()
+
+        conn.commit()
 
         cur.close()
         conn.close()
 
         if not resultado:
-            return {"erro": "Usuário não encontrado"}
+
+            return {
+                "erro": "Usuário não encontrado"
+            }
 
         nome, pronome, memoria = resultado
 
@@ -120,4 +164,7 @@ def login(usuario: Usuario):
         }
 
     except Exception as e:
-        return {"erro": str(e)}
+
+        return {
+            "erro": str(e)
+        }
