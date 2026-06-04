@@ -132,9 +132,9 @@ def login(usuario: Login):
             usuario.nome,
         ))
 
-        # Busca dados do usuário
+        # Busca dados completos
         cur.execute("""
-            SELECT nome, pronome, memoria
+            SELECT id, nome, pronome, memoria
             FROM usuarios
             WHERE nome = %s
         """, (
@@ -154,9 +154,10 @@ def login(usuario: Login):
                 "erro": "Usuário não encontrado"
             }
 
-        nome, pronome, memoria = resultado
+        usuario_id, nome, pronome, memoria = resultado
 
         return {
+            "id": usuario_id,
             "nome": nome,
             "pronome": pronome,
             "memoria": memoria,
