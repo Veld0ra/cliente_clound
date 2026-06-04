@@ -22,20 +22,20 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # =========================
 memoria_ram = []
 
-
 # =========================
 # CACHE GLOBAL
 # =========================
 memoria_base_cache = ""
 memoria_ontem_cache = ""
 
-
 # =========================
 # MODELS
 # =========================
 class Mensagem(BaseModel):
     texto: str
-
+    nome: str = ""
+    pronome: str = ""
+    memoria: str = ""
 
 # =========================
 # MEMÓRIA BASE
@@ -68,7 +68,6 @@ def carregar_memoria_base():
         print("ERRO MEMÓRIA BASE:", e)
         return "Você é a Sema."
 
-
 # =========================
 # MEMÓRIA DE ONTEM
 # =========================
@@ -100,14 +99,14 @@ def carregar_memoria_ontem():
         print("ERRO MEMÓRIA ONTEM:", e)
         return ""
 
-
 # =========================
 # START
 # =========================
 @app.get("/start")
 def start():
 
-    global memoria_base_cache, memoria_ontem_cache
+    global memoria_base_cache
+    global memoria_ontem_cache
 
     memoria_ram.clear()
 
@@ -123,14 +122,12 @@ def start():
         "memoria_ontem": memoria_ontem_cache
     }
 
-
 # =========================
 # HOME
 # =========================
 @app.get("/")
 def home():
     return {"status": "online"}
-
 
 # =========================
 # CHAT
@@ -141,6 +138,7 @@ def chat(msg: Mensagem):
     texto = msg.texto.strip()
 
     if texto.lower() == "sair":
+
         salvar_diario()
         memoria_ram.clear()
 
@@ -158,6 +156,15 @@ def chat(msg: Mensagem):
         for role, conteudo in memoria_ram[-10:]
     )
 
+    perfil_usuario = f"""
+Perfil do usuário:
+
+Nome: {msg.nome}
+Pronome: {msg.pronome}
+Informações conhecidas:
+{msg.memoria}
+"""
+
     contexto = f"""
 {INSTRUCOES_SEMA}
 
@@ -165,6 +172,8 @@ def chat(msg: Mensagem):
 
 Memória de ontem:
 {memoria_ontem_cache}
+
+{perfil_usuario}
 
 Memória atual:
 {conversa_atual}
@@ -182,8 +191,9 @@ Memória atual:
     if len(memoria_ram) > 100:
         memoria_ram.pop(0)
 
-    return {"resposta": texto_resposta}
-
+    return {
+        "resposta": texto_resposta
+    }
 
 # =========================
 # SALVAR DIÁRIO
@@ -194,7 +204,12 @@ def salvar_diario():
         return
 
     try:
-        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+
+        conn = psycopg2.connect(
+            DATABASE_URL,
+            sslmode="require"
+        )
+
         cur = conn.cursor()
 
         data = datetime.now().date()
