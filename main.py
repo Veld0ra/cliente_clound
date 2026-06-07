@@ -209,9 +209,16 @@ def chat(msg: Mensagem):
 
     if usuario_atual_tipo != "visitante":
 
-    memoria_ontem_cache = carregar_memoria_ontem(
-        usuario_atual_id
-    )
+        memoria_ontem_cache = carregar_memoria_ontem(
+            usuario_atual_id
+        )
+
+        print("\nDEBUG MEMÓRIA:")
+        print(memoria_ontem_cache[:1000])
+
+    else:
+
+        memoria_ontem_cache = ""
 
     texto = msg.texto.strip()
 
