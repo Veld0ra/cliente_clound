@@ -27,6 +27,9 @@ memoria_ram = []
 # =========================
 memoria_base_cache = ""
 memoria_ontem_cache = ""
+usuario_atual_id = None
+usuario_atual_nome = ""
+usuario_atual_tipo = "visitante"
 
 # =========================
 # MODELS
@@ -139,6 +142,14 @@ def home():
 # =========================
 @app.post("/chat")
 def chat(msg: Mensagem):
+
+    global usuario_atual_id
+    global usuario_atual_nome
+    global usuario_atual_tipo
+
+    usuario_atual_id = msg.id
+    usuario_atual_nome = msg.nome
+    usuario_atual_tipo = msg.tipo
 
     texto = msg.texto.strip()
 
