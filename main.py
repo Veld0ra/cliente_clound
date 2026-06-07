@@ -79,32 +79,86 @@ def carregar_memoria_base():
 # =========================
 # MEMÓRIA DE ONTEM
 # =========================
-def carregar_memoria_ontem():
+def carregar_memoria_ontem(usuario_id):
 
     if not DATABASE_URL:
         return ""
 
+    if not usuario_id:
+        return ""
+
     try:
-        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+
+        conn = psycopg2.connect(
+            DATABASE_URL,
+            sslmode="require"
+        )
+
         cur = conn.cursor()
 
-        ontem = datetime.now().date() - timedelta(days=1)
+        hoje = datetime.now().date()
 
+        # Conversas de hoje
         cur.execute("""
             SELECT conteudo
             FROM memoria_diario_v2
-            WHERE data = %s
-        """, (ontem,))
+            WHERE usuario_id = %s
+            AND data = %s
+        """, (
+            usuario_id,
+            hoje
+        ))
 
-        resultado = cur.fetchone()
+        resultado_hoje = cur.fetchone()
+
+        memoria_hoje = (
+            resultado_hoje[0]
+            if resultado_hoje
+            else ""
+        )
+
+        # Último dia anterior
+        cur.execute("""
+            SELECT conteudo, data
+            FROM memoria_diario_v2
+            WHERE usuario_id = %s
+            AND data < %s
+            ORDER BY data DESC
+            LIMIT 1
+        """, (
+            usuario_id,
+            hoje
+        ))
+
+        resultado_anterior = cur.fetchone()
+
+        memoria_anterior = ""
+
+        if resultado_anterior:
+
+            conteudo, data_memoria = resultado_anterior
+
+            memoria_anterior = f"""
+ÚLTIMO DIA DE CONVERSA ({data_memoria})
+
+{conteudo}
+"""
 
         cur.close()
         conn.close()
 
-        return resultado[0] if resultado else ""
+        return f"""
+CONVERSAS DE HOJE
+
+{memoria_hoje}
+
+{memoria_anterior}
+"""
 
     except Exception as e:
-        print("ERRO MEMÓRIA ONTEM:", e)
+
+        print("ERRO MEMÓRIA:", e)
+
         return ""
 
 # =========================
@@ -119,7 +173,7 @@ def start():
     memoria_ram.clear()
 
     memoria_base_cache = carregar_memoria_base()
-    memoria_ontem_cache = carregar_memoria_ontem()
+    memoria_ontem_cache = ""
 
     print("✔ Memória Base carregada")
     print("✔ Memória de ontem carregada")
@@ -150,6 +204,14 @@ def chat(msg: Mensagem):
     usuario_atual_id = msg.id
     usuario_atual_nome = msg.nome
     usuario_atual_tipo = msg.tipo
+
+    global memoria_ontem_cache
+
+    if usuario_atual_tipo != "visitante":
+
+    memoria_ontem_cache = carregar_memoria_ontem(
+        usuario_atual_id
+    )
 
     texto = msg.texto.strip()
 
