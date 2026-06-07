@@ -33,9 +33,14 @@ memoria_ontem_cache = ""
 # =========================
 class Mensagem(BaseModel):
     texto: str
+
+    id: int | None = None
+
     nome: str = ""
     pronome: str = ""
     memoria: str = ""
+
+    tipo: str = "usuario"
 
 # =========================
 # MEMÓRIA BASE
