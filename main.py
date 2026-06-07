@@ -264,6 +264,10 @@ Memória atual:
 {conversa_atual}
 """
 
+    print("\n========== CONTEXTO ==========")
+    print(contexto[:3000])
+    print("========== FIM CONTEXTO ==========\n")
+    
     resposta = client.responses.create(
         model="gpt-5-mini",
         input=contexto
