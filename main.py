@@ -6,6 +6,7 @@ from core.usuario import *
 from core.memoria import carregar_memoria_base, carregar_memoria_ontem
 from services.chat import gerar_resposta
 from services.diario import salvar_diario
+from config.instrucoes import INSTRUCOES_SEMA
 
 app = FastAPI()
 app.include_router(router)
