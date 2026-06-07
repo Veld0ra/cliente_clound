@@ -216,7 +216,15 @@ Memória atual:
 # =========================
 def salvar_diario():
 
+    global usuario_atual_id
+    global usuario_atual_nome
+    global usuario_atual_tipo
+
     if not DATABASE_URL or not memoria_ram:
+        return
+
+    # visitante não salva histórico
+    if usuario_atual_tipo == "visitante":
         return
 
     try:
@@ -237,21 +245,37 @@ def salvar_diario():
         )
 
         cur.execute("""
-            INSERT INTO memoria_diario_v2 (data, conteudo)
-            VALUES (%s, %s)
-            ON CONFLICT (data)
+            INSERT INTO memoria_diario_v2
+            (
+                usuario_id,
+                usuario,
+                data,
+                conteudo
+            )
+            VALUES (%s, %s, %s, %s)
+
+            ON CONFLICT (usuario_id, data)
+
             DO UPDATE SET
             conteudo = memoria_diario_v2.conteudo
                        || E'\n\n'
                        || EXCLUDED.conteudo
-        """, (data, sessao))
+        """, (
+            usuario_atual_id,
+            usuario_atual_nome,
+            data,
+            sessao
+        ))
 
         conn.commit()
 
         cur.close()
         conn.close()
 
-        print("✔ Diário salvo")
+        print(
+            f"✔ Diário salvo para "
+            f"{usuario_atual_nome}"
+        )
 
     except Exception as e:
         print("❌ ERRO DIÁRIO:", e)
