@@ -284,6 +284,10 @@ Memória atual:
     print(contexto[:3000])
     print("========== FIM CONTEXTO ==========\n")
 
+    print("\n===== INSTRUÇÕES =====")
+    print(INSTRUCOES_SEMA[:1000])
+    print("======================\n")
+    
     resposta = client.responses.create(
         model="gpt-5-mini",
         input=contexto
