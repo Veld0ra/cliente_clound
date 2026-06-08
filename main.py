@@ -200,12 +200,11 @@ def chat(msg: Mensagem):
     global usuario_atual_id
     global usuario_atual_nome
     global usuario_atual_tipo
+    global memoria_ontem_cache
 
     usuario_atual_id = msg.id
     usuario_atual_nome = msg.nome
     usuario_atual_tipo = msg.tipo
-
-    global memoria_ontem_cache
 
     if usuario_atual_tipo != "visitante":
 
@@ -221,8 +220,12 @@ def chat(msg: Mensagem):
         memoria_ontem_cache = ""
 
     texto = msg.texto.strip()
+    comando = texto.lower()
 
-    if texto.lower() == "sair":
+    # =========================
+    # COMANDOS
+    # =========================
+    if comando == "/sair":
 
         salvar_diario()
         memoria_ram.clear()
@@ -231,6 +234,18 @@ def chat(msg: Mensagem):
             "resposta": "Sessão finalizada. Conversa salva no diário."
         }
 
+    if comando == "/trocar usuario":
+
+        salvar_diario()
+        memoria_ram.clear()
+
+        return {
+            "resposta": "Usuário alterado."
+        }
+
+    # =========================
+    # MEMÓRIA RAM
+    # =========================
     memoria_ram.append(("user", texto))
 
     if len(memoria_ram) > 100:
@@ -246,6 +261,7 @@ Perfil do usuário:
 
 Nome: {msg.nome}
 Pronome: {msg.pronome}
+
 Informações conhecidas:
 {msg.memoria}
 """
@@ -255,7 +271,7 @@ Informações conhecidas:
 
 {memoria_base_cache}
 
-Memória de ontem:
+Memória de hoje e histórico recente:
 {memoria_ontem_cache}
 
 {perfil_usuario}
@@ -267,7 +283,7 @@ Memória atual:
     print("\n========== CONTEXTO ==========")
     print(contexto[:3000])
     print("========== FIM CONTEXTO ==========\n")
-    
+
     resposta = client.responses.create(
         model="gpt-5-mini",
         input=contexto
@@ -275,7 +291,9 @@ Memória atual:
 
     texto_resposta = resposta.output_text.strip()
 
-    memoria_ram.append(("assistant", texto_resposta))
+    memoria_ram.append(
+        ("assistant", texto_resposta)
+    )
 
     if len(memoria_ram) > 100:
         memoria_ram.pop(0)
