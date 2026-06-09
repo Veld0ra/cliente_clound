@@ -256,7 +256,7 @@ def chat(msg: Mensagem):
         for role, conteudo in memoria_ram[-10:]
     )
 
-perfil_usuario = f"""
+    perfil_usuario = f"""
 Perfil do usuário:
 
 Nome: {msg.nome}
