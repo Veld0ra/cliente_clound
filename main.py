@@ -266,8 +266,18 @@ Informações conhecidas:
 {msg.memoria}
 """
 
-    contexto = f"""
+agora = datetime.now()
+
+contexto_temporal = f"""
+Data atual: {agora.strftime('%d/%m/%Y')}
+Hora atual: {agora.strftime('%H:%M')}
+Local atual: São Paulo, Brasil
+"""
+
+contexto = f"""
 {INSTRUCOES_SEMA}
+
+{contexto_temporal}
 
 {memoria_base_cache}
 
