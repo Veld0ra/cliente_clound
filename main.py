@@ -256,7 +256,7 @@ def chat(msg: Mensagem):
         for role, conteudo in memoria_ram[-10:]
     )
 
-    perfil_usuario = f"""
+perfil_usuario = f"""
 Perfil do usuário:
 
 Nome: {msg.nome}
@@ -266,15 +266,15 @@ Informações conhecidas:
 {msg.memoria}
 """
 
-agora = datetime.now()
+    agora = datetime.now()
 
-contexto_temporal = f"""
+    contexto_temporal = f"""
 Data atual: {agora.strftime('%d/%m/%Y')}
 Hora atual: {agora.strftime('%H:%M')}
 Local atual: São Paulo, Brasil
 """
 
-contexto = f"""
+    contexto = f"""
 {INSTRUCOES_SEMA}
 
 {contexto_temporal}
